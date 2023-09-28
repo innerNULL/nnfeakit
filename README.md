@@ -1,4 +1,5 @@
 # Neural Network Feature Kit
+This is my personal side project. The idea is how about having a lib which can help you quickly leverage or analysis tabular feature with simple neural network model.
 
 ## Install
 ```shell
