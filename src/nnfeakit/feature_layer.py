@@ -1,0 +1,154 @@
+# -*- coding: utf-8 -*-
+# file: feature_layer.py
+# date: 2023-09-28
+
+
+import pdb
+import torch
+from enum import Enum
+from typing import Union, List, Optional, Set, Dict
+from torch import device
+from torch import Tensor, LongTensor, FloatTensor
+from torch.nn import Module, ModuleDict
+from torch.nn import Linear, Softmax, Parameter, Embedding
+
+
+FEATURE_TYPES: Set[str] = {"float", "int", "array"}
+
+
+class FeatureColumn(Module):
+    def __init__(self, 
+        fea_name: str, fea_type: str, fea_space_size: int=-1, 
+        in_dim: int=1, out_dim: int=1
+    ):
+        super().__init__()
+        self.name: str = ""
+        self.type: str = None
+        self.space_size: Optional[int] = None
+        self.in_dim: int = 1
+        self.out_dim: int = 1
+
+        self.name = fea_name
+
+        if fea_type in FEATURE_TYPES:
+            self.type = fea_type
+        else:
+            raise "Illegal `fea_type` value."
+
+        if fea_type == "int":
+            if fea_space_size <= 0:
+                raise "Illegal `fea_space_size` value."
+            else:
+                self.space_size = fea_space_size
+
+        if fea_type == "int":
+            self.out_dim = out_dim
+        if fea_type == "array":
+            self.in_dim = in_dim
+            self.out_dim = in_dim
+
+
+class FloatFeatureColumn(FeatureColumn):
+    def __init__(self,
+        fea_name: str, fea_type: str, fea_space_size: int=-1,
+        in_dim: int=1, out_dim: int=1
+    ):
+        super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
+        assert(self.type == "float")
+
+    def forward(self, feature: FloatTensor) -> FloatTensor:
+        assert(feature.shape[-1] == 1)
+        return feature
+
+    @classmethod
+    def new(cls, conf: Dict[str, Union[int, str]]):
+        return cls(
+            fea_name=conf["name"], fea_type="float",
+            fea_space_size=-1, in_dim=1, out_dim=1
+        )
+
+
+class IntFeatureColumn(FeatureColumn):
+    def __init__(self, 
+        fea_name: str, fea_type: str, fea_space_size: int=-1, 
+        in_dim: int=1, out_dim: int=1 
+    ):
+        super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
+        assert(self.type == "int")
+        assert(out_dim < fea_space_size)
+
+        self.embedding: Embedding = Embedding(
+            num_embeddings=self.space_size, embedding_dim=self.out_dim
+        )
+
+    def forward(self, feature: LongTensor) -> FloatTensor:
+        # TODO:
+        # Using `mean` to merge embeddings is not always reasonable for 
+        # multi-hot case.
+        return self.embedding(feature).mean(dim=-2)
+
+    @classmethod
+    def new(cls, conf: Dict[str, Union[int, str]]):
+        return cls(
+            fea_name=conf["name"], fea_type="int", 
+            fea_space_size=conf["fea_space_size"], in_dim=-1, out_dim=conf["out_dim"]
+        )
+
+
+class ArrayFeatureColumn(FeatureColumn):
+    def __init__(self,
+        fea_name: str, fea_type: str, fea_space_size: int=-1,
+        in_dim: int=1, out_dim: int=1
+    ):
+        super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
+        assert(self.type == "array")
+        assert(in_dim == out_dim)
+
+    def forward(self, feature: FloatTensor) -> FloatTensor:
+        assert(feature.shape[-1] == self.in_dim)
+        return feature
+
+    @classmethod
+    def new(cls, conf: Dict[str, Union[int, str]]):
+        return cls(
+            fea_name=conf["name"], fea_type="array",
+            fea_space_size=-1, in_dim=conf["in_dim"], out_dim=conf["in_dim"]
+        )
+
+
+class FeatureLayer(Module):
+    def __init__(self, features: List[Dict[str, Union[int, str]]]):
+        super().__init__()
+        self.feature_names: List[str] = []
+        self.feature_columns: ModuleDict = ModuleDict()
+        
+        for fea_conf in features:
+            fea_name: str = fea_conf["name"]
+            fea_type: str = fea_conf["type"]
+
+            if fea_name in self.feature_columns:
+                raise "Feature '%s' already exists." % fea_name
+            
+            self.feature_names.append(fea_name)
+
+            if fea_type == "int":
+                self.feature_columns[fea_name] = IntFeatureColumn.new(fea_conf)
+            elif fea_type == "float":
+                self.feature_columns[fea_name] = FloatFeatureColumn.new(fea_conf)
+            elif fea_type == "array":
+                #TODO: Not verified
+                self.feature_columns[fea_name] = ArrayFeatureColumn.new(fea_conf)
+            else:
+                raise "Illegal feature type '%s'" % fea_type
+
+    def forward(self, inputs: Dict[str, Tensor]) -> FloatTensor:
+        assert(len(inputs) == len(self.feature_names))
+
+        feature_vals: List[FloatTensor] = []
+        for feature_name in self.feature_names:
+            feature_inputs: Tensor = inputs[feature_name]
+            feature_vals.append(
+                self.feature_columns[feature_name](feature_inputs)
+            )
+        return torch.cat(feature_vals, dim=-1)
+
