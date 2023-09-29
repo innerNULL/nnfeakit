@@ -121,6 +121,7 @@ class FeatureLayer(Module):
         super().__init__()
         self.feature_names: List[str] = []
         self.feature_columns: ModuleDict = ModuleDict()
+        self.out_dim: int = 0
         
         for fea_conf in features:
             fea_name: str = fea_conf["name"]
@@ -129,20 +130,23 @@ class FeatureLayer(Module):
             if fea_name in self.feature_columns:
                 raise "Feature '%s' already exists." % fea_name
             
-            self.feature_names.append(fea_name)
-
+            fea_col: FeatureColumn = None
             if fea_type == "int":
-                self.feature_columns[fea_name] = IntFeatureColumn.new(fea_conf)
+                fea_col = IntFeatureColumn.new(fea_conf)
             elif fea_type == "float":
-                self.feature_columns[fea_name] = FloatFeatureColumn.new(fea_conf)
+                fea_col = FloatFeatureColumn.new(fea_conf)
             elif fea_type == "array":
-                #TODO: Not verified
-                self.feature_columns[fea_name] = ArrayFeatureColumn.new(fea_conf)
+                fea_col = ArrayFeatureColumn.new(fea_conf)
             else:
                 raise "Illegal feature type '%s'" % fea_type
 
+            self.feature_names.append(fea_name)
+            self.feature_columns[fea_name] = fea_col
+            self.out_dim += fea_col.out_dim
+
     def forward(self, inputs: Dict[str, Tensor]) -> FloatTensor:
-        assert(len(inputs) == len(self.feature_names))
+        for feature_name in self.feature_names:
+            assert(feature_name in inputs)
 
         feature_vals: List[FloatTensor] = []
         for feature_name in self.feature_names:
