@@ -13,8 +13,8 @@ import random
 from typing import List, Dict
 from torch import Tensor, LongTensor, FloatTensor
 
-from nnfeakit.feature_layer import IntFeatureColumn, FloatFeatureColumn, ArrayFeatureColumn
-from nnfeakit.feature_layer import FeatureLayer
+from quickmlp.feature_layer import IntFeatureColumn, FloatFeatureColumn, ArrayFeatureColumn
+from quickmlp.feature_layer import FeatureLayer
 
 
 def test_FloatFeatureColumn_0() -> None:

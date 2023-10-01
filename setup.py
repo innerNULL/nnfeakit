@@ -35,7 +35,7 @@ def get_install_deps() -> Tuple[List[str], List[str] ]:
 if __name__ == "__main__":
     get_install_deps()
     setup(
-        name="nnfeakit",
+        name="quickmlp",
         version="0.0.0",
         author="innerNULL",
         author_email="",
@@ -44,7 +44,8 @@ if __name__ == "__main__":
         python_requires='>=3.8, <=3.11',
         install_requires=get_install_deps()[0], 
         dependency_links=get_install_deps()[1],
-        packages=find_packages(),
+        package_dir={"": "src"},
+        packages=find_packages("src"),
         zip_safe=False,
         extras_require={"test": ["pytest"]},
     )
