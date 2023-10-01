@@ -1,5 +1,5 @@
-# Neural Network Feature Kit
-This is my personal side project. The idea is how about having a lib which can help you quickly leverage or analysis tabular feature with simple neural network model.
+# Quick MLP
+This is my personal side project. The idea is how about having a lib which can help you quickly leverage or analysis tabular feature with simple neural network model: MLP.
 
 ## Install
 ```shell
@@ -18,5 +18,5 @@ python -m pip install -r requirements.txt
 ## Test
 ```shell
 python -m pip install -r requirements-test.txt
-python -m pytest ./tests/ --cov=./src/nnfeakit --durations=0 -v
+python -m pytest ./tests/ --cov=./src/quickmlp --durations=0 -v
 ```
