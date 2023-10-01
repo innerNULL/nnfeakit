@@ -19,7 +19,7 @@ FEATURE_TYPES: Set[str] = {"float", "int", "array"}
 class FeatureColumn(Module):
     def __init__(self, 
         fea_name: str, fea_type: str, fea_space_size: int=-1, 
-        in_dim: int=1, out_dim: int=1
+        in_dim: int=1, out_dim: int=1, padding_idx: int=-1
     ):
         super().__init__()
         self.name: str = ""
@@ -51,7 +51,7 @@ class FeatureColumn(Module):
 class FloatFeatureColumn(FeatureColumn):
     def __init__(self,
         fea_name: str, fea_type: str, fea_space_size: int=-1,
-        in_dim: int=1, out_dim: int=1
+        in_dim: int=1, out_dim: int=1, padding_idx: int=-1
     ):
         super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
         assert(self.type == "float")
@@ -64,21 +64,23 @@ class FloatFeatureColumn(FeatureColumn):
     def new(cls, conf: Dict[str, Union[int, str]]):
         return cls(
             fea_name=conf["name"], fea_type="float",
-            fea_space_size=-1, in_dim=1, out_dim=1
+            fea_space_size=-1, in_dim=1, out_dim=1, padding_idx=-1
         )
 
 
 class IntFeatureColumn(FeatureColumn):
     def __init__(self, 
         fea_name: str, fea_type: str, fea_space_size: int=-1, 
-        in_dim: int=1, out_dim: int=1 
+        in_dim: int=1, out_dim: int=1, padding_idx: int=-1 
     ):
         super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
         assert(self.type == "int")
-        assert(out_dim < fea_space_size)
+        assert(out_dim < fea_space_size and out_dim > 1)
+        assert(padding_idx >= 0)
 
         self.embedding: Embedding = Embedding(
-            num_embeddings=self.space_size, embedding_dim=self.out_dim
+            num_embeddings=self.space_size, embedding_dim=self.out_dim, 
+            padding_idx=padding_idx
         )
 
     def forward(self, feature: LongTensor) -> FloatTensor:
@@ -91,14 +93,16 @@ class IntFeatureColumn(FeatureColumn):
     def new(cls, conf: Dict[str, Union[int, str]]):
         return cls(
             fea_name=conf["name"], fea_type="int", 
-            fea_space_size=conf["fea_space_size"], in_dim=-1, out_dim=conf["out_dim"]
+            fea_space_size=conf["fea_space_size"], 
+            in_dim=conf["in_dim"], out_dim=conf["out_dim"], 
+            padding_idx=conf["padding_idx"]
         )
 
 
 class ArrayFeatureColumn(FeatureColumn):
     def __init__(self,
         fea_name: str, fea_type: str, fea_space_size: int=-1,
-        in_dim: int=1, out_dim: int=1
+        in_dim: int=1, out_dim: int=1, padding_idx: int=-1
     ):
         super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
         assert(self.type == "array")
@@ -112,7 +116,8 @@ class ArrayFeatureColumn(FeatureColumn):
     def new(cls, conf: Dict[str, Union[int, str]]):
         return cls(
             fea_name=conf["name"], fea_type="array",
-            fea_space_size=-1, in_dim=conf["in_dim"], out_dim=conf["in_dim"]
+            fea_space_size=-1, in_dim=conf["in_dim"], out_dim=conf["in_dim"], 
+            padding_idx=-1
         )
 
 
