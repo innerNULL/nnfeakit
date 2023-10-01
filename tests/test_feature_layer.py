@@ -13,8 +13,8 @@ import random
 from typing import List, Dict
 from torch import Tensor, LongTensor, FloatTensor
 
-from nnfeakit.feature_layer import IntFeatureColumn, FloatFeatureColumn, ArrayFeatureColumn
-from nnfeakit.feature_layer import FeatureLayer
+from quickmlp.feature_layer import IntFeatureColumn, FloatFeatureColumn, ArrayFeatureColumn
+from quickmlp.feature_layer import FeatureLayer
 
 
 def test_FloatFeatureColumn_0() -> None:
@@ -68,7 +68,7 @@ def test_IntFeatureColumn_0() -> None:
     try:
         fea_col = IntFeatureColumn(
             fea_name="fea1", fea_type="float", 
-            fea_space_size=128, in_dim=-1, out_dim=16
+            fea_space_size=128, in_dim=10, out_dim=16
         )
     except Exception as e:
         error = 1
@@ -78,7 +78,7 @@ def test_IntFeatureColumn_0() -> None:
     try:
         fea_col = IntFeatureColumn(
             fea_name="fea1", fea_type="int",
-            fea_space_size=128, in_dim=-1, out_dim=256
+            fea_space_size=128, in_dim=20, out_dim=256
         )
     except Exception as e:
         error = 1
@@ -88,7 +88,29 @@ def test_IntFeatureColumn_0() -> None:
     try:
         fea_col = IntFeatureColumn(
             fea_name="fea1", fea_type="int",
-            fea_space_size=10000, in_dim=-1, out_dim=256
+            fea_space_size=10000, in_dim=15, out_dim=256
+        )
+    except Exception as e:
+        error = 1
+    assert(error == 1)
+
+    error = 0
+    try:
+        fea_col = IntFeatureColumn(
+            fea_name="fea1", fea_type="int",
+            fea_space_size=10000, in_dim=15, out_dim=1, 
+            padding_idx=0
+        )
+    except Exception as e:
+        error = 1
+    assert(error == 1)
+
+    error = 0
+    try:
+        fea_col = IntFeatureColumn(
+            fea_name="fea1", fea_type="int",
+            fea_space_size=10000, in_dim=15, out_dim=256, 
+            padding_idx=0
         )
     except Exception as e:
         error = 1
@@ -97,12 +119,15 @@ def test_IntFeatureColumn_0() -> None:
 
 def test_IntFeatureColumn_1() -> None:
     embedding_dim: int = 256
+    in_dim: int = 5
     fea_col: IntFeatureColumn = IntFeatureColumn(
         fea_name="fea1", fea_type="int", 
-        fea_space_size=10000, in_dim=-1, out_dim=embedding_dim
+        fea_space_size=10000, in_dim=5, out_dim=embedding_dim, 
+        padding_idx=0
     )
     single_input: LongTensor = LongTensor([1, 22, 33, 444, 5555])
     single_output: FloatTensor = fea_col(single_input)
+    assert(single_input.shape[-1] == in_dim)
     assert(single_output.shape[-1] == embedding_dim)
 
 
@@ -208,21 +233,22 @@ def test_FeatureLayer_3() -> None:
 def test_FeatureLayer_4() -> None:
     fea_configs: List[Dict] = [
         {"name": "fea1", "type": "float"},
-        {"name": "fea2", "type": "int", "fea_space_size": 10000, "out_dim": 128}, 
+        {"name": "fea2", "type": "int", "fea_space_size": 10000, "in_dim": 4, "out_dim": 128, "padding_idx": 0}, 
         {"name": "fea3", "type": "float"}, 
         {"name": "fea4", "type": "array", "in_dim": 64}, 
-        {"name": "fea5", "type": "int", "fea_space_size": 7531, "out_dim": 256},
+        {"name": "fea5", "type": "int", "fea_space_size": 7531, "in_dim": 5, "out_dim": 256, "padding_idx": 0},
     ]
     fake_single_inputs: Dict[Tensor] = {
         "fea1": FloatTensor([3.14]), 
         "fea2": LongTensor([5, 66, 777, 8888]), 
         "fea3": FloatTensor([0.15926]), 
         "fea4": FloatTensor([random.random() for i in range(64)]), 
-        "fea5": LongTensor([8, 77, 666, 5555])
+        "fea5": LongTensor([8, 77, 666, 5555, 0])
     }
     
     fea_layer: FeatureLayer = FeatureLayer(fea_configs)
     
     single_outputs: FloatTensor = fea_layer(fake_single_inputs)
     assert(single_outputs.shape[-1] == (1 + 128 + 1 + 64 + 256))
+    assert(fea_layer.out_dim == single_outputs.shape[-1])
 

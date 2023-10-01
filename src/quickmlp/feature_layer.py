@@ -19,7 +19,7 @@ FEATURE_TYPES: Set[str] = {"float", "int", "array"}
 class FeatureColumn(Module):
     def __init__(self, 
         fea_name: str, fea_type: str, fea_space_size: int=-1, 
-        in_dim: int=1, out_dim: int=1
+        in_dim: int=1, out_dim: int=1, padding_idx: int=-1
     ):
         super().__init__()
         self.name: str = ""
@@ -51,7 +51,7 @@ class FeatureColumn(Module):
 class FloatFeatureColumn(FeatureColumn):
     def __init__(self,
         fea_name: str, fea_type: str, fea_space_size: int=-1,
-        in_dim: int=1, out_dim: int=1
+        in_dim: int=1, out_dim: int=1, padding_idx: int=-1
     ):
         super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
         assert(self.type == "float")
@@ -64,21 +64,23 @@ class FloatFeatureColumn(FeatureColumn):
     def new(cls, conf: Dict[str, Union[int, str]]):
         return cls(
             fea_name=conf["name"], fea_type="float",
-            fea_space_size=-1, in_dim=1, out_dim=1
+            fea_space_size=-1, in_dim=1, out_dim=1, padding_idx=-1
         )
 
 
 class IntFeatureColumn(FeatureColumn):
     def __init__(self, 
         fea_name: str, fea_type: str, fea_space_size: int=-1, 
-        in_dim: int=1, out_dim: int=1 
+        in_dim: int=1, out_dim: int=1, padding_idx: int=-1 
     ):
         super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
         assert(self.type == "int")
-        assert(out_dim < fea_space_size)
+        assert(out_dim < fea_space_size and out_dim > 1)
+        assert(padding_idx >= 0)
 
         self.embedding: Embedding = Embedding(
-            num_embeddings=self.space_size, embedding_dim=self.out_dim
+            num_embeddings=self.space_size, embedding_dim=self.out_dim, 
+            padding_idx=padding_idx
         )
 
     def forward(self, feature: LongTensor) -> FloatTensor:
@@ -91,14 +93,16 @@ class IntFeatureColumn(FeatureColumn):
     def new(cls, conf: Dict[str, Union[int, str]]):
         return cls(
             fea_name=conf["name"], fea_type="int", 
-            fea_space_size=conf["fea_space_size"], in_dim=-1, out_dim=conf["out_dim"]
+            fea_space_size=conf["fea_space_size"], 
+            in_dim=conf["in_dim"], out_dim=conf["out_dim"], 
+            padding_idx=conf["padding_idx"]
         )
 
 
 class ArrayFeatureColumn(FeatureColumn):
     def __init__(self,
         fea_name: str, fea_type: str, fea_space_size: int=-1,
-        in_dim: int=1, out_dim: int=1
+        in_dim: int=1, out_dim: int=1, padding_idx: int=-1
     ):
         super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
         assert(self.type == "array")
@@ -112,7 +116,8 @@ class ArrayFeatureColumn(FeatureColumn):
     def new(cls, conf: Dict[str, Union[int, str]]):
         return cls(
             fea_name=conf["name"], fea_type="array",
-            fea_space_size=-1, in_dim=conf["in_dim"], out_dim=conf["in_dim"]
+            fea_space_size=-1, in_dim=conf["in_dim"], out_dim=conf["in_dim"], 
+            padding_idx=-1
         )
 
 
@@ -121,6 +126,7 @@ class FeatureLayer(Module):
         super().__init__()
         self.feature_names: List[str] = []
         self.feature_columns: ModuleDict = ModuleDict()
+        self.out_dim: int = 0
         
         for fea_conf in features:
             fea_name: str = fea_conf["name"]
@@ -129,20 +135,23 @@ class FeatureLayer(Module):
             if fea_name in self.feature_columns:
                 raise "Feature '%s' already exists." % fea_name
             
-            self.feature_names.append(fea_name)
-
+            fea_col: FeatureColumn = None
             if fea_type == "int":
-                self.feature_columns[fea_name] = IntFeatureColumn.new(fea_conf)
+                fea_col = IntFeatureColumn.new(fea_conf)
             elif fea_type == "float":
-                self.feature_columns[fea_name] = FloatFeatureColumn.new(fea_conf)
+                fea_col = FloatFeatureColumn.new(fea_conf)
             elif fea_type == "array":
-                #TODO: Not verified
-                self.feature_columns[fea_name] = ArrayFeatureColumn.new(fea_conf)
+                fea_col = ArrayFeatureColumn.new(fea_conf)
             else:
                 raise "Illegal feature type '%s'" % fea_type
 
+            self.feature_names.append(fea_name)
+            self.feature_columns[fea_name] = fea_col
+            self.out_dim += fea_col.out_dim
+
     def forward(self, inputs: Dict[str, Tensor]) -> FloatTensor:
-        assert(len(inputs) == len(self.feature_names))
+        for feature_name in self.feature_names:
+            assert(feature_name in inputs)
 
         feature_vals: List[FloatTensor] = []
         for feature_name in self.feature_names:
