@@ -42,10 +42,15 @@ class FeatureColumn(Module):
                 self.space_size = fea_space_size
 
         if fea_type == "int":
+            self.in_dim = in_dim
             self.out_dim = out_dim
         if fea_type == "array":
             self.in_dim = in_dim
             self.out_dim = in_dim
+
+    def _forward_check(self, feature: Tensor) -> None:
+        assert(len(feature.shape) == 2)
+        assert(feature.shape[1] == self.in_dim)
 
 
 class FloatFeatureColumn(FeatureColumn):
@@ -57,7 +62,7 @@ class FloatFeatureColumn(FeatureColumn):
         assert(self.type == "float")
 
     def forward(self, feature: FloatTensor) -> FloatTensor:
-        assert(feature.shape[-1] == 1)
+        self._forward_check(feature)
         return feature
 
     @classmethod
@@ -71,23 +76,34 @@ class FloatFeatureColumn(FeatureColumn):
 class IntFeatureColumn(FeatureColumn):
     def __init__(self, 
         fea_name: str, fea_type: str, fea_space_size: int=-1, 
-        in_dim: int=1, out_dim: int=1, padding_idx: int=-1 
+        in_dim: int=1, out_dim: int=1, padding_idx: int=-1, 
+        merger: str="null"
     ):
         super().__init__(fea_name, fea_type, fea_space_size, in_dim, out_dim)
         assert(self.type == "int")
         assert(out_dim < fea_space_size and out_dim > 1)
         assert(padding_idx >= 0)
+        assert(merger in {"sum", "mean", "concat"})
+        
+        self.embedding_dim: int = out_dim
+        self.merger: str = merger
+
+        if merger == "concat":
+            self.out_dim = self.out_dim * self.in_dim
 
         self.embedding: Embedding = Embedding(
-            num_embeddings=self.space_size, embedding_dim=self.out_dim, 
+            num_embeddings=self.space_size, embedding_dim=self.embedding_dim, 
             padding_idx=padding_idx
         )
 
     def forward(self, feature: LongTensor) -> FloatTensor:
-        # TODO:
-        # Using `mean` to merge embeddings is not always reasonable for 
-        # multi-hot case.
-        return self.embedding(feature).mean(dim=-2)
+        self._forward_check(feature)
+        if self.merger == "sum":
+            return self.embedding(feature).sum(dim=-2)
+        elif self.merger == "mean":
+            return self.embedding(feature).mean(dim=-2)
+        elif self.merger == "concat":
+            return self.embedding(feature).view(-1, self.out_dim)
 
     @classmethod
     def new(cls, conf: Dict[str, Union[int, str]]):
@@ -95,7 +111,8 @@ class IntFeatureColumn(FeatureColumn):
             fea_name=conf["name"], fea_type="int", 
             fea_space_size=conf["fea_space_size"], 
             in_dim=conf["in_dim"], out_dim=conf["out_dim"], 
-            padding_idx=conf["padding_idx"]
+            padding_idx=conf["padding_idx"], 
+            merger=conf["merger"]
         )
 
 
@@ -109,7 +126,7 @@ class ArrayFeatureColumn(FeatureColumn):
         assert(in_dim == out_dim)
 
     def forward(self, feature: FloatTensor) -> FloatTensor:
-        assert(feature.shape[-1] == self.in_dim)
+        self._forward_check(feature)
         return feature
 
     @classmethod
